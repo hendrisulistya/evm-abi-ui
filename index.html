@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EVM Contract Interaction</title>
+</head>
+<body>
+    <h1>EVM Contract Interaction</h1>
+
+    <!-- Input fields for ABI JSON, RPC URL, and contract address -->
+    <div>
+        <label for="abi-input">ABI JSON:</label>
+        <textarea id="abi-input" rows="5" cols="50"></textarea>
+    </div>
+    <div>
+        <label for="rpc-url-input">RPC URL:</label>
+        <input type="text" id="rpc-url-input">
+    </div>
+    <div>
+        <label for="contract-address-input">Contract Address:</label>
+        <input type="text" id="contract-address-input">
+    </div>
+
+    <!-- Button to load contract and display available functions -->
+    <button id="load-contract-button">Load Contract</button>
+
+    <!-- Read Section -->
+    <div>
+        <h2>Read Section</h2>
+        <label for="function-select">Select a Function:</label>
+        <select id="function-select">
+            <option value="" disabled selected>Select a Function</option> <!-- Default option -->
+        </select>
+        <form id="function-params-form"></form>
+        <button id="read-button" disabled>Read Data</button>
+        <div>
+            <h3>Result:</h3>
+            <div id="result-display"></div>
+        </div>
+    </div>
+
+    <!-- Write Section -->
+    <div>
+        <!-- Input Private Key field-->
+        <div>
+            <label for="private-key-input">Private Key:</label>
+            <input type="text" id="private-key-input" placeholder="Enter your private key">
+        </div>
+        <button id="check-balance-button">Check Balance</button>
+        <button id="display-address-button">Display Address</button>
+        <div>
+            <h2>Ethereum Address:</h2>
+            <p id="address-display"></p>
+        </div>
+
+        <h2>Write Section</h2>
+        <label for="write-function-select">Select a Function:</label>
+        <select id="write-function-select">
+            <option value="" disabled selected>Select a Function</option> <!-- Default option -->
+        </select>
+        <form id="write-function-params-form"></form>
+        <button id="write-button" disabled>Write Data</button>
+        <div>
+            <h3>Transaction Hash:</h3>
+            <div id="write-result-display"></div>
+        </div>
+    </div>
+
+    <!-- JavaScript to interact with Ethereum contract -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.5.2/web3.min.js"></script>
+    <script>
+        const web3 = new Web3(document.getElementById('rpc-url-input').value);
+        let readFunctions = [];
+        let writeFunctions = [];
+
+        // Reusable function to create input fields for function parameters
+        function createParamInputFields(formId, functionInputs) {
+            const inputForm = document.getElementById(formId);
+            inputForm.innerHTML = '';
+            functionInputs.forEach(param => {
+                const label = document.createElement('label');
+                label.textContent = `${param.name}: `;
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.id = `${formId}-param-input-${param.name}`;
+                label.appendChild(input);
+                inputForm.appendChild(label);
+            });
+        }
+
+        // Event handler for the "Load Contract" button
+        document.getElementById('load-contract-button').addEventListener('click', async () => {
+            try {
+                const abi = JSON.parse(document.getElementById('abi-input').value);
+                const contractAddress = document.getElementById('contract-address-input').value;
+                const contract = new web3.eth.Contract(abi, contractAddress);
+
+                readFunctions = abi.filter(item =>
+                    (item.type === 'function' && (item.constant === true || (item.outputs && item.outputs.length > 0)))
+                );
+
+                writeFunctions = abi.filter(item =>
+                    (item.type === 'function' && item.constant !== true)
+                );
+
+                populateFunctionSelect('function-select', readFunctions);
+                populateFunctionSelect('write-function-select', writeFunctions);
+
+                document.getElementById('read-button').disabled = false;
+                document.getElementById('write-button').disabled = false;
+
+                createParamInputFields('function-params-form', []);
+                createParamInputFields('write-function-params-form', []);
+
+                document.getElementById('function-select').value = '';
+                document.getElementById('write-function-select').value = '';
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred. Check the console for details.');
+            }
+        });
+
+        // Function to populate a function select dropdown
+        function populateFunctionSelect(selectId, functions) {
+            const functionSelect = document.getElementById(selectId);
+            functionSelect.innerHTML = '';
+            const defaultOption = document.createElement('option');
+            defaultOption.value = '';
+            defaultOption.text = 'Select a Function';
+            defaultOption.disabled = true;
+            defaultOption.selected = true;
+            functionSelect.appendChild(defaultOption);
+            functions.forEach(func => {
+                const option = document.createElement('option');
+                option.value = func.name;
+                option.text = func.name;
+                functionSelect.appendChild(option);
+            });
+        }
+
+        // Event handler for function select change in the read section
+        document.getElementById('function-select').addEventListener('change', () => {
+            const functionName = document.getElementById('function-select').value;
+            const abi = JSON.parse(document.getElementById('abi-input').value);
+            const selectedFunction = abi.find(item => item.name === functionName);
+            createParamInputFields('function-params-form', selectedFunction.inputs || []);
+        });
+
+        // Event handler for function select change in the write section
+        document.getElementById('write-function-select').addEventListener('change', () => {
+            const functionName = document.getElementById('write-function-select').value;
+            const abi = JSON.parse(document.getElementById('abi-input').value);
+            const selectedFunction = abi.find(item => item.name === functionName);
+            createParamInputFields('write-function-params-form', selectedFunction.inputs || []);
+        });
+
+        // Add an event listener for the "Check Balance" button
+        document.getElementById('check-balance-button').addEventListener('click', async () => {
+            try {
+                const privateKey = document.getElementById('private-key-input').value;
+                const wallet = web3.eth.accounts.privateKeyToAccount(privateKey);
+                const balance = await web3.eth.getBalance(wallet.address);
+                alert(`Account Balance: ${web3.utils.fromWei(balance, 'ether')} ETH`);
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred. Check the console for details.');
+            }
+        });
+
+        // Add an event listener for the "Display Address" button
+        document.getElementById('display-address-button').addEventListener('click', () => {
+            try {
+                const privateKey = document.getElementById('private-key-input').value;
+                const wallet = web3.eth.accounts.privateKeyToAccount(privateKey);
+                const addressDisplay = document.getElementById('address-display');
+                addressDisplay.textContent = wallet.address;
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred. Check the console for details.');
+            }
+        });
+
+        // Event handler for the "Write Data" button
+        document.getElementById('write-button').addEventListener('click', async () => {
+            try {
+                const functionName = document.getElementById('write-function-select').value;
+                const abi = JSON.parse(document.getElementById('abi-input').value);
+                const contractAddress = document.getElementById('contract-address-input').value;
+                const privateKey = document.getElementById('private-key-input').value;
+
+                const wallet = web3.eth.accounts.privateKeyToAccount(privateKey);
+                const selectedFunction = abi.find(item => item.name === functionName);
+                const functionInputs = selectedFunction.inputs || [];
+                const inputValues = [];
+
+                for (const param of functionInputs) {
+                    const inputValue = document.getElementById(`write-function-params-form-param-input-${param.name}`).value;
+                    inputValues.push(inputValue);
+                }
+
+                const accountAddress = wallet.address;
+                const balance = await web3.eth.getBalance(accountAddress);
+
+                const gasCost = await web3.eth.estimateGas({
+                    to: contractAddress,
+                    data: web3.eth.abi.encodeFunctionCall(selectedFunction, inputValues),
+                });
+
+                if (balance < gasCost) {
+                    alert('Insufficient balance to cover the gas cost.');
+                    return;
+                }
+
+                const txObject = {
+                    to: contractAddress,
+                    data: web3.eth.abi.encodeFunctionCall(selectedFunction, inputValues),
+                    gas: gasCost,
+                };
+
+                const signedTx = await web3.eth.accounts.signTransaction(txObject, privateKey);
+                const txReceipt = await web3.eth.sendSignedTransaction(signedTx.rawTransaction);
+
+                const writeResultDisplay = document.getElementById('write-result-display');
+                writeResultDisplay.innerHTML = `Transaction Hash: ${txReceipt.transactionHash}`;
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred. Check the console for details.');
+            }
+        });
+
+        // Event handler for the "Read Data" button
+        document.getElementById('read-button').addEventListener('click', async () => {
+            try {
+                const functionName = document.getElementById('function-select').value;
+                const abi = JSON.parse(document.getElementById('abi-input').value);
+                const contractAddress = document.getElementById('contract-address-input').value;
+                const contract = new web3.eth.Contract(abi, contractAddress);
+                const selectedFunction = abi.find(item => item.name === functionName);
+                const functionInputs = selectedFunction.inputs || [];
+                const inputValues = [];
+
+                for (const param of functionInputs) {
+                    const inputValue = document.getElementById(`function-params-form-param-input-${param.name}`).value;
+                    inputValues.push(inputValue);
+                }
+
+                const result = await contract.methods[functionName](...inputValues).call();
+                const resultDisplay = document.getElementById('result-display');
+                resultDisplay.innerHTML = '';
+
+                if (typeof result === 'object') {
+                    const resultString = JSON.stringify(result, null, 2);
+                    resultDisplay.textContent = `Result:\n${resultString}`;
+                } else {
+                    resultDisplay.textContent = `Result: ${result}`;
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred. Check the console for details.');
+            }
+        });
+    </script>
+</body>
+</html>
